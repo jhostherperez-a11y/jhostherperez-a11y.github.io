@@ -8,7 +8,7 @@
     h1 { text-align: center; }
     table { width: 100%; border-collapse: collapse; margin-top: 15px; background: white; }
     th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
-    th { background: #2b5797; color: white; cursor: pointer; }
+    th { background: #2b5797; color: white; }
     tr:nth-child(even) { background: #f2f2f2; }
     input, select, button { margin: 5px; padding: 6px; }
     label { display: block; font-weight: bold; margin-top: 10px; }
@@ -33,6 +33,7 @@
   </style>
 </head>
 <body>
+  <!-- botón de regreso -->
   <a href="index.html" class="volver-btn" style="
     position: fixed;
     top: 15px;
@@ -50,8 +51,9 @@
   <button class="print-btn" onclick="imprimirTabla()">🖨️ Imprimir tabla</button>
   <h1>Registro de Materiales</h1>
   <p id="fechaImpresion" style="display:none;"></p>
-  <p class="hint">Haz clic en los encabezados para ordenar por columna.</p>
+  <p class="hint">Los cambios se guardan en Google Sheets. Salida y eliminación requieren contraseña.</p>
 
+  <!-- FORMULARIO -->
   <div class="form-container">
     <div>
       <label for="Material">Material</label>
@@ -75,7 +77,6 @@
       <select id="Espec" required>
         <option value="">-- Selecciona --</option>
         <option>A36</option>
-        <option>A1011</option>
         <option>Inox</option>
         <option>A500B</option>
         <option>A53</option>
@@ -125,6 +126,7 @@
     </div>
   </div>
 
+  <!-- TABLA -->
   <table id="tabla">
     <thead>
       <tr>
@@ -146,8 +148,12 @@
   </table>
 
   <script>
-    let datos = JSON.parse(localStorage.getItem('compras')) || [];
-    let idCounter = datos.length ? Math.max(...datos.map(d => d.id)) + 1 : 1;
+    // 🔗 Pega aquí la URL que te dé Apps Script
+    const API_URL = "https://script.google.com/a/macros/industrial-metal.com/s/AKfycbxVEgtoTJEjXxXDp5eK3832g25jKZIQZS0N7PnKgUya4OW2uGt6OQIWVOwBanaZiWR2/exec";
+
+    let datos = [];
+    let idCounter = 1;
+    // si quieres seguir usando las OT desde localStorage:
     let ordenesTrabajo = JSON.parse(localStorage.getItem('ordenesTrabajo')) || ["Stock"];
 
     function poblarSelectOT() {
@@ -165,6 +171,7 @@
       if (el.value === "" || parseInt(el.value) < 1) el.value = 1;
     }
 
+    // decimal → pulg + fracción 1/16, redondeo hacia arriba
     function decimalAPulgFraccion(valor) {
       const v = parseFloat(valor);
       if (isNaN(v)) return "";
@@ -208,31 +215,69 @@
       });
     }
 
-    function agregarFila() {
-      const material = Material.value;
-      const espec = Espec.value;
-      const largo = Largo.value;
-      const ancho = Ancho.value;
-      const qty = Qty.value;
-      const ordenTrabajo = OrdenTrabajo.value || "Stock";
-      const fechaEntrada = FechaEntrada.value;
-      const usuario = Usuario.value;
+    async function cargarDatos() {
+      try {
+        const res = await fetch(API_URL);
+        const arr = await res.json();
+        datos = arr || [];
+        if (datos.length) {
+          idCounter = Math.max(...datos.map(d => Number(d.id) || 0)) + 1;
+        } else {
+          idCounter = 1;
+        }
+        renderTabla();
+      } catch (e) {
+        console.error("Error cargando datos de Sheets:", e);
+        alert("No se pudieron cargar los datos de Google Sheets.");
+      }
+    }
 
-      if (!material || !espec || !usuario) return alert("Completa todos los campos.");
+    async function guardarDatos() {
+      try {
+        await fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(datos)
+        });
+      } catch (e) {
+        console.error("Error guardando datos en Sheets:", e);
+        alert("No se pudieron guardar los datos en Google Sheets.");
+      }
+    }
 
-      datos.push({
+    async function agregarFila() {
+      const material = document.getElementById("Material").value;
+      const espec = document.getElementById("Espec").value;
+      const largo = document.getElementById("Largo").value;
+      const ancho = document.getElementById("Ancho").value;
+      const qty = document.getElementById("Qty").value;
+      const ordenTrabajo = document.getElementById("OrdenTrabajo").value || "Stock";
+      const fechaEntrada = document.getElementById("FechaEntrada").value;
+      const usuario = document.getElementById("Usuario").value;
+
+      if (!material || !espec || !usuario) return alert("Completa los campos obligatorios.");
+
+      const nuevo = {
         id: idCounter++,
-        material, espec, largo, ancho, qty,
-        ordenTrabajo, fechaEntrada, fechaSalida: "", usuario
-      });
+        material,
+        espec,
+        largo,
+        ancho,
+        qty,
+        ordenTrabajo,
+        fechaEntrada,
+        fechaSalida: "",
+        usuario,
+      };
 
-      localStorage.setItem("compras", JSON.stringify(datos));
+      datos.push(nuevo);
+      await guardarDatos();
       renderTabla();
     }
 
-    // 🔐 aquí es donde ahora pedimos contraseña ANTES de capturar la fecha
-    function agregarFechaSalida(id) {
-      const index = datos.findIndex(d => d.id === id);
+    // salida con contraseña
+    async function agregarFechaSalida(id) {
+      const index = datos.findIndex(d => Number(d.id) === Number(id));
       if (index === -1) return;
 
       const clave = prompt("Ingresa la clave de autorización para salida:");
@@ -248,16 +293,19 @@
       }
 
       datos[index].fechaSalida = fecha;
-      localStorage.setItem("compras", JSON.stringify(datos));
+      await guardarDatos();
       renderTabla();
     }
 
-    function borrarFila(id) {
+    async function borrarFila(id) {
       if (!confirm("¿Seguro que deseas eliminar este registro?")) return;
       const clave = prompt("Ingresa la clave de autorización:");
-      if (clave !== "AlmacenIM25") return alert("Clave incorrecta.");
-      datos = datos.filter(d => d.id !== id);
-      localStorage.setItem("compras", JSON.stringify(datos));
+      if (clave !== "AlmacenIM25") {
+        alert("Clave incorrecta.");
+        return;
+      }
+      datos = datos.filter(d => Number(d.id) !== Number(id));
+      await guardarDatos();
       renderTabla();
     }
 
@@ -267,8 +315,9 @@
       window.print();
     }
 
+    // inicial
     poblarSelectOT();
-    renderTabla();
+    cargarDatos();
   </script>
 </body>
 </html>
