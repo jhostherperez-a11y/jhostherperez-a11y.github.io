@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Admin OT</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 30px; background: #f7f7f7; }
+    h1 { text-align: center; }
+    .panel { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 6px rgba(0,0,0,0.1); max-width: 500px; margin: 0 auto; }
+    input, select, button { margin: 5px 0; padding: 6px; }
+    button { cursor: pointer; }
+    ul { list-style: none; padding-left: 0; }
+    li { background: #eee; margin-bottom: 5px; padding: 6px; display: flex; justify-content: space-between; align-items: center; }
+    .del-btn { background: #d9534f; color: white; border: none; padding: 3px 8px; cursor: pointer; }
+  </style>
+</head>
+<body>
+
+<a href="index.html" style="
+  position: fixed;
+  top: 15px;
+  left: 15px;
+  background: #555;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  text-decoration: none;
+  font-size: 0.9em;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+  z-index: 999;
+">🏠 Volver al menú</a>
+
+
+  <h1>Administración de Órdenes de Trabajo</h1>
+  <div class="panel">
+    <p>Esta pantalla es para controlar qué órdenes de trabajo pueden usar en el registro.</p>
+    <label for="clave">Clave de administrador</label>
+    <input type="password" id="clave" placeholder="Ingresa clave para editar">
+    <button onclick="validarClave()">Acceder</button>
+
+    <div id="contenido" style="display:none;">
+      <h3>Órdenes actuales</h3>
+      <ul id="listaOT"></ul>
+
+      <h3>Agregar nueva OT</h3>
+      <input id="nuevaOT" placeholder="OT-200">
+      <button onclick="agregarOT()">Agregar</button>
+    </div>
+  </div>
+
+  <script>
+    const CLAVE = "AlmacenIM25";
+    let ordenesTrabajo = JSON.parse(localStorage.getItem('ordenesTrabajo')) || ["Stock"];
+
+    function mostrarOTs() {
+      const ul = document.getElementById("listaOT");
+      ul.innerHTML = "";
+      ordenesTrabajo.forEach(ot => {
+        const li = document.createElement("li");
+        li.textContent = ot;
+        if (ot !== "Stock") {
+          const btn = document.createElement("button");
+          btn.textContent = "Eliminar";
+          btn.className = "del-btn";
+          btn.onclick = () => eliminarOT(ot);
+          li.appendChild(btn);
+        }
+        ul.appendChild(li);
+      });
+    }
+
+    function validarClave() {
+      const clave = document.getElementById("clave").value;
+      if (clave !== CLAVE) {
+        alert("Clave incorrecta");
+        return;
+      }
+      document.getElementById("contenido").style.display = "block";
+      mostrarOTs();
+    }
+
+    function agregarOT() {
+      const nueva = document.getElementById("nuevaOT").value.trim();
+      if (!nueva) {
+        alert("Ingresa una OT válida.");
+        return;
+      }
+      if (ordenesTrabajo.includes(nueva)) {
+        alert("Esa OT ya existe.");
+        return;
+      }
+      ordenesTrabajo.push(nueva);
+      localStorage.setItem("ordenesTrabajo", JSON.stringify(ordenesTrabajo));
+      document.getElementById("nuevaOT").value = "";
+      mostrarOTs();
+    }
+
+    function eliminarOT(ot) {
+      const ok = confirm(`¿Eliminar la OT "${ot}"?`);
+      if (!ok) return;
+      ordenesTrabajo = ordenesTrabajo.filter(o => o !== ot);
+      localStorage.setItem("ordenesTrabajo", JSON.stringify(ordenesTrabajo));
+      mostrarOTs();
+    }
+  </script>
+</body>
+</html>

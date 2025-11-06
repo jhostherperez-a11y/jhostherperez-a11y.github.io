@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Registro de Materiales</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 30px; background: #f7f7f7; }
+    h1 { text-align: center; }
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; background: white; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+    th { background: #2b5797; color: white; cursor: pointer; }
+    tr:nth-child(even) { background: #f2f2f2; }
+    input, select, button { margin: 5px; padding: 6px; }
+    label { display: block; font-weight: bold; margin-top: 10px; }
+    .del-btn { background: #d9534f; color: white; border: none; padding: 5px 10px; cursor: pointer; }
+    .salida-btn { background: #5bc0de; color: white; border: none; padding: 5px 10px; cursor: pointer; margin-left: 4px; }
+    .form-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; background: #ffffff; padding: 15px; border-radius: 8px; box-shadow: 0 0 6px rgba(0,0,0,0.1); }
+    .form-container div { display: flex; flex-direction: column; }
+    button.agregar { background: #2b5797; color: white; border: none; padding: 8px; cursor: pointer; border-radius: 4px; }
+    button.agregar:hover { background: #1d3b6e; }
+    .estatus-pendiente { color: #d9534f; font-weight: bold; }
+    .estatus-entregado { color: #5cb85c; font-weight: bold; }
+    .hint { margin-top: 10px; font-size: 0.9rem; color: #555; }
+    .print-btn { background: #4caf50; color: white; border: none; padding: 8px 14px; cursor: pointer; border-radius: 4px; margin-bottom: 10px; }
+
+    @media print {
+      .form-container, .hint, .print-btn, .volver-btn { display: none !important; }
+      button, .salida-btn, .del-btn { display: none !important; }
+      table { width: 100%; border: 1px solid #000; font-size: 12px; }
+      th { background: #ddd !important; color: #000 !important; }
+      #fechaImpresion { display: block; text-align: right; margin-bottom: 10px; font-size: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <a href="index.html" class="volver-btn" style="
+    position: fixed;
+    top: 15px;
+    right: 15px;
+    background: #2b5797;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    text-decoration: none;
+    font-size: 0.9em;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    z-index: 999;
+  ">🏠 Volver al menú</a>
+
+  <button class="print-btn" onclick="imprimirTabla()">🖨️ Imprimir tabla</button>
+  <h1>Registro de Materiales</h1>
+  <p id="fechaImpresion" style="display:none;"></p>
+  <p class="hint">Haz clic en los encabezados para ordenar por columna.</p>
+
+  <div class="form-container">
+    <div>
+      <label for="Material">Material</label>
+      <select id="Material" required>
+        <option value="">-- Selecciona --</option>
+        <option>Placa 1/4"</option>
+        <option>Placa 3/16"</option>
+        <option>Lam. Cal. 10.</option>
+        <option>Lam. Cal. 11.</option>
+        <option>Lam. Cal. 12.</option>
+        <option>Lam. Cal. 14.</option>
+        <option>Lam. Cal. 18.</option>
+        <option>Placa 3/8"</option>
+        <option>Placa 3/4"</option>
+        <option>Placa 1"</option>
+      </select>
+    </div>
+
+    <div>
+      <label for="Espec">Especificación</label>
+      <select id="Espec" required>
+        <option value="">-- Selecciona --</option>
+        <option>A36</option>
+        <option>A1011</option>
+        <option>Inox</option>
+        <option>A500B</option>
+        <option>A53</option>
+        <option>AR450</option>
+      </select>
+    </div>
+
+    <div>
+      <label for="Largo">Largo (pulg)</label>
+      <input id="Largo" type="number" step="0.01" min="0" placeholder="Ej. 48.75">
+    </div>
+
+    <div>
+      <label for="Ancho">Ancho (pulg)</label>
+      <input id="Ancho" type="number" step="0.01" min="0" placeholder="Ej. 24.5">
+    </div>
+
+    <div>
+      <label for="Qty">Cantidad</label>
+      <input id="Qty" type="number" min="1" step="1" value="1" oninput="validarQty(this)">
+    </div>
+
+    <div>
+      <label for="OrdenTrabajo">Orden de Trabajo</label>
+      <select id="OrdenTrabajo"></select>
+      <small style="color:#777;">(Se agregan en admin-ot)</small>
+    </div>
+
+    <div>
+      <label for="FechaEntrada">Fecha de Entrada</label>
+      <input id="FechaEntrada" type="date">
+    </div>
+
+    <div>
+      <label for="Usuario">Área Solicitante</label>
+      <select id="Usuario">
+        <option value="">-- Selecciona --</option>
+        <option>Ingenieria</option>
+        <option>Produccion</option>
+        <option>Mantenimiento</option>
+        <option>Almacen</option>
+      </select>
+    </div>
+
+    <div style="align-self: end;">
+      <button class="agregar" onclick="agregarFila()">Agregar</button>
+    </div>
+  </div>
+
+  <table id="tabla">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Material</th>
+        <th>Espec</th>
+        <th>Largo</th>
+        <th>Ancho</th>
+        <th>Qty</th>
+        <th>Orden de Trabajo</th>
+        <th>Fecha de Entrada</th>
+        <th>Fecha de Salida</th>
+        <th>Usuario</th>
+        <th>Estatus</th>
+        <th>Acción</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script>
+    let datos = JSON.parse(localStorage.getItem('compras')) || [];
+    let idCounter = datos.length ? Math.max(...datos.map(d => d.id)) + 1 : 1;
+    let ordenesTrabajo = JSON.parse(localStorage.getItem('ordenesTrabajo')) || ["Stock"];
+
+    function poblarSelectOT() {
+      const otSelect = document.getElementById("OrdenTrabajo");
+      otSelect.innerHTML = "";
+      ordenesTrabajo.forEach(ot => {
+        const opt = document.createElement("option");
+        opt.value = ot;
+        opt.textContent = ot;
+        otSelect.appendChild(opt);
+      });
+    }
+
+    function validarQty(el) {
+      if (el.value === "" || parseInt(el.value) < 1) el.value = 1;
+    }
+
+    function decimalAPulgFraccion(valor) {
+      const v = parseFloat(valor);
+      if (isNaN(v)) return "";
+      const entero = Math.floor(v);
+      const frac = v - entero;
+      let num16 = Math.ceil(frac * 16);
+      if (num16 === 0) return `${entero}`;
+      if (num16 === 16) return `${entero + 1}`;
+      const mcd = (a,b) => b ? mcd(b, a % b) : a;
+      const g = mcd(num16, 16);
+      return `${entero} ${num16/g}/${16/g}`;
+    }
+
+    function calcularEstatus(d) {
+      return d.fechaEntrada && d.fechaSalida ? "Entregado" : "Pendiente";
+    }
+
+    function renderTabla() {
+      const tbody = document.querySelector("#tabla tbody");
+      tbody.innerHTML = "";
+      datos.forEach(d => {
+        const fila = document.createElement("tr");
+        fila.innerHTML = `
+          <td>${d.id}</td>
+          <td>${d.material}</td>
+          <td>${d.espec}</td>
+          <td>${decimalAPulgFraccion(d.largo)}</td>
+          <td>${decimalAPulgFraccion(d.ancho)}</td>
+          <td>${d.qty}</td>
+          <td>${d.ordenTrabajo}</td>
+          <td>${d.fechaEntrada || ""}</td>
+          <td>${d.fechaSalida || ""}</td>
+          <td>${d.usuario}</td>
+          <td class="${calcularEstatus(d)==='Entregado'?'estatus-entregado':'estatus-pendiente'}">${calcularEstatus(d)}</td>
+          <td>
+            <button class="salida-btn" onclick="agregarFechaSalida(${d.id})">Salida</button>
+            <button class="del-btn" onclick="borrarFila(${d.id})">Eliminar</button>
+          </td>
+        `;
+        tbody.appendChild(fila);
+      });
+    }
+
+    function agregarFila() {
+      const material = Material.value;
+      const espec = Espec.value;
+      const largo = Largo.value;
+      const ancho = Ancho.value;
+      const qty = Qty.value;
+      const ordenTrabajo = OrdenTrabajo.value || "Stock";
+      const fechaEntrada = FechaEntrada.value;
+      const usuario = Usuario.value;
+
+      if (!material || !espec || !usuario) return alert("Completa todos los campos.");
+
+      datos.push({
+        id: idCounter++,
+        material, espec, largo, ancho, qty,
+        ordenTrabajo, fechaEntrada, fechaSalida: "", usuario
+      });
+
+      localStorage.setItem("compras", JSON.stringify(datos));
+      renderTabla();
+    }
+
+    // 🔐 aquí es donde ahora pedimos contraseña ANTES de capturar la fecha
+    function agregarFechaSalida(id) {
+      const index = datos.findIndex(d => d.id === id);
+      if (index === -1) return;
+
+      const clave = prompt("Ingresa la clave de autorización para salida:");
+      if (clave !== "AlmacenIM25") {
+        alert("Clave incorrecta. No se registró la salida.");
+        return;
+      }
+
+      const fecha = prompt("Ingresa la fecha de salida (dd/mm/aaaa):");
+      if (!fecha || !/^\d{2}\/\d{2}\/\d{4}$/.test(fecha)) {
+        alert("Formato incorrecto. Usa dd/mm/aaaa.");
+        return;
+      }
+
+      datos[index].fechaSalida = fecha;
+      localStorage.setItem("compras", JSON.stringify(datos));
+      renderTabla();
+    }
+
+    function borrarFila(id) {
+      if (!confirm("¿Seguro que deseas eliminar este registro?")) return;
+      const clave = prompt("Ingresa la clave de autorización:");
+      if (clave !== "AlmacenIM25") return alert("Clave incorrecta.");
+      datos = datos.filter(d => d.id !== id);
+      localStorage.setItem("compras", JSON.stringify(datos));
+      renderTabla();
+    }
+
+    function imprimirTabla() {
+      const fecha = new Date().toLocaleString("es-MX");
+      document.getElementById("fechaImpresion").textContent = "Fecha de impresión: " + fecha;
+      window.print();
+    }
+
+    poblarSelectOT();
+    renderTabla();
+  </script>
+</body>
+</html>

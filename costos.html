@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Métricos de costo</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 30px; background: #f7f7f7; }
+    h1 { text-align: center; }
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; background: white; }
+    th, td { border: 1px solid #ccc; padding: 6px; text-align: center; }
+    th { background: #2b5797; color: #fff; }
+    .totales { display: flex; gap: 20px; margin-top: 15px; }
+    .card { background: #fff; padding: 10px 15px; border-radius: 6px; box-shadow: 0 0 6px rgba(0,0,0,0.08); }
+    .label { font-weight: bold; }
+    .warn { color: #b94a48; font-size: 0.85rem; margin-top: 10px; }
+    button { background: #2b5797; color: #fff; border: none; padding: 6px 10px; cursor: pointer; border-radius: 4px; margin-top: 10px; }
+    @media print {
+      button { display: none; }
+      body { margin: 0; }
+      table { width: 100%; border: 1px solid #000; font-size: 12px; }
+      th { background: #ddd !important; color: #000 !important; }
+      .card { border: 1px solid #000; }
+    }
+  </style>
+</head>
+<body>
+
+<a href="index.html" style="
+  position: fixed;
+  top: 15px;
+  left: 15px;
+  background: #3b7a3b;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  text-decoration: none;
+  font-size: 0.9em;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+  z-index: 999;
+">🏠 Volver al menú</a>
+
+
+
+
+  <h1>Métricos de costo</h1>
+  <p class="warn">Nota: solo se calculan los materiales que tienen <strong>lbs/ft²</strong> y <strong>$ MXN/kg</strong> definidos en el código.</p>
+  <button onclick="window.print()">Imprimir</button>
+
+  <table id="tablaCostos">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Material</th>
+        <th>Asignado a</th>
+        <th>Largo (in)</th>
+        <th>Ancho (in)</th>
+        <th>Qty</th>
+        <th>Peso unitario (kg)</th>
+        <th>Peso total (kg)</th>
+        <th>Costo unitario (MXN)</th>
+        <th>Costo total (MXN)</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <div class="totales">
+    <div class="card">
+      <div class="label">Total con OT:</div>
+      <div>$ <span id="totalOT">0.00</span> MXN</div>
+    </div>
+    <div class="card">
+      <div class="label">Total como Stock:</div>
+      <div>$ <span id="totalStock">0.00</span> MXN</div>
+    </div>
+    <div class="card">
+      <div class="label">Total general:</div>
+      <div>$ <span id="totalGeneral">0.00</span> MXN</div>
+    </div>
+  </div>
+
+  <script>
+    // Catálogo fijo (NO editable en la página)
+    // Nombres adaptados para coincidir con tu página principal donde los pusiste con comillas o "Lam. Cal."
+    const catalogoMateriales = {
+      // Placas
+      'Placa 3/16"': { lbs_ft2: 7.66, mxn_kg: 21.67 },
+      'Placa 1/4"': { lbs_ft2: 10.21, mxn_kg: 18.61 },
+      'Placa 5/16"': { lbs_ft2: 12.76, mxn_kg: 20.07 },
+      'Placa 3/8"': { lbs_ft2: 15.31, mxn_kg: 18.65 },
+      'Placa 1/2"': { lbs_ft2: 20.42, mxn_kg: 24.26 },
+      'Placa 3/4"': { lbs_ft2: 30.63, mxn_kg: 25.79 },
+      'Placa 1"': { lbs_ft2: 40.84, mxn_kg: 30.73 },
+
+      // Láminas: mapeadas a tu naming de la otra página
+      'Lam. Cal. 12.': { lbs_ft2: 4.37, mxn_kg: 18.63 },
+      'Lam. Cal. 11.': { lbs_ft2: 5.00, mxn_kg: 18.63 },
+      'Lam. Cal. 10.': { lbs_ft2: 5.63, mxn_kg: 18.63 },
+
+      // También las formas en mayúsculas que tú pusiste, por si algún registro se guardó así
+      'Placa 3/16': { lbs_ft2: 7.66, mxn_kg: 21.67 },
+      'Placa 1/4': { lbs_ft2: 10.21, mxn_kg: 18.61 },
+      'Placa 5/16': { lbs_ft2: 12.76, mxn_kg: 20.07 },
+      'Placa 3/8': { lbs_ft2: 15.31, mxn_kg: 18.65 },
+      'Placa 1/2': { lbs_ft2: 20.42, mxn_kg: 24.26 },
+      'Placa 3/4': { lbs_ft2: 30.63, mxn_kg: 25.79 },
+      'Placa 1': { lbs_ft2: 40.84, mxn_kg: 30.73 },
+      'LAM. C12': { lbs_ft2: 4.37, mxn_kg: 18.63 },
+      'LAM. C11': { lbs_ft2: 5.00, mxn_kg: 18.63 },
+      'LAM. C10': { lbs_ft2: 5.63, mxn_kg: 18.63 },
+    };
+
+    // Leer lo que capturaste en la página principal
+    const registros = JSON.parse(localStorage.getItem('compras')) || [];
+
+    function obtenerConfigMaterial(nombre) {
+      // Intento directo
+      if (catalogoMateriales[nombre]) return catalogoMateriales[nombre];
+
+      // Intento limpiar espacios
+      const limpio = nombre.trim();
+      if (catalogoMateriales[limpio]) return catalogoMateriales[limpio];
+
+      // Intento pasar de "Lam. Cal. 10." a "LAM. C10"
+      if (limpio.startsWith("Lam. Cal.")) {
+        const num = limpio.replace("Lam. Cal.", "").replace(".", "").trim();
+        const key = "LAM. C" + num;
+        if (catalogoMateriales[key]) return catalogoMateriales[key];
+      }
+
+      return null;
+    }
+
+    function recalcular() {
+      const tbody = document.querySelector("#tablaCostos tbody");
+      tbody.innerHTML = "";
+
+      let totalOT = 0;
+      let totalStock = 0;
+
+      registros.forEach(reg => {
+        const config = obtenerConfigMaterial(reg.material);
+        // Si no tenemos datos completos de ese material, lo saltamos
+        if (!config || !config.lbs_ft2 || !config.mxn_kg) {
+          return; // lo omites, tú dijiste que luego los alimentas
+        }
+
+        const largo = parseFloat(reg.largo) || 0;
+        const ancho = parseFloat(reg.ancho) || 0;
+        const qty = parseFloat(reg.qty) || 0;
+        const asignadoA = reg.ordenTrabajo && reg.ordenTrabajo !== "" ? reg.ordenTrabajo : "Stock";
+
+        // área en ft²
+        const areaFt2 = (ancho * largo) / 144;
+        // peso unitario (kg)
+        const pesoUnitarioKg = areaFt2 * config.lbs_ft2 * 0.454;
+        const pesoTotalKg = pesoUnitarioKg * qty;
+        const costoUnitario = pesoUnitarioKg * config.mxn_kg;
+        const costoTotal = costoUnitario * qty;
+
+        // acumular
+        if (asignadoA === "Stock") {
+          totalStock += costoTotal;
+        } else {
+          totalOT += costoTotal;
+        }
+
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${reg.id}</td>
+          <td>${reg.material}</td>
+          <td>${asignadoA}</td>
+          <td>${largo}</td>
+          <td>${ancho}</td>
+          <td>${qty}</td>
+          <td>${pesoUnitarioKg.toFixed(3)}</td>
+          <td>${pesoTotalKg.toFixed(3)}</td>
+          <td>${costoUnitario.toFixed(2)}</td>
+          <td>${costoTotal.toFixed(2)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById("totalOT").textContent = totalOT.toFixed(2);
+      document.getElementById("totalStock").textContent = totalStock.toFixed(2);
+      document.getElementById("totalGeneral").textContent = (totalOT + totalStock).toFixed(2);
+    }
+
+    recalcular();
+  </script>
+</body>
+</html>
